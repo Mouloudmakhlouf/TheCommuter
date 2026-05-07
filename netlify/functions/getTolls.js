@@ -12,7 +12,6 @@ exports.handler = async function(event, context) {
     from: { address: startCity + ", Poland" },
     to: { address: endCity + ", Poland" },
     vehicleType: "2AxlesAuto",
-    serviceProvider: "gmaps",
     currency: "PLN"
   };
 
