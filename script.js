@@ -28,7 +28,17 @@ async function calculateSplit() {
     if (!response.ok) throw new Error("API failed");
     
     const data = await response.json();
-    const route = data.routes[0]; 
+    console.log("TOLLGURU RESPONSE:", data); // <-- shows us the secret error
+
+    if (!data.routes) {
+         alert("TollGuru API failed. Check the console for details.");
+         // Reset button so you aren't stuck loading
+         document.querySelector('.primary-btn').innerText = "Calculate & Save Trip";
+         document.querySelector('.primary-btn').disabled = false;
+         return; 
+    }
+
+    const route = data.routes[0];
     
     let distance = parseFloat(route.summary.distance.metric); 
     let tolls = 0;
