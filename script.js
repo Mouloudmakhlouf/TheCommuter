@@ -15,11 +15,10 @@ async function calculateSplit() {
   }
 
   const calcBtn = document.querySelector('.primary-btn');
-  calcBtn.innerText = "⏳ Routing with TollGuru...";
+  calcBtn.innerText = "⏳ Analyzing All Routes...";
   calcBtn.disabled = true;
 
   try {
-    // Call our Netlify backend
     const response = await fetch('/.netlify/functions/getTolls', {
       method: 'POST',
       body: JSON.stringify({ startCity, endCity })
@@ -28,58 +27,77 @@ async function calculateSplit() {
     if (!response.ok) throw new Error("API failed");
     
     const data = await response.json();
-    console.log("TOLLGURU RESPONSE:", data); // <-- shows us the secret error
-
-    if (!data.routes) {
-         alert("TollGuru API failed. Check the console for details.");
-         // Reset button so you aren't stuck loading
-         document.querySelector('.primary-btn').innerText = "Calculate & Save Trip";
-         document.querySelector('.primary-btn').disabled = false;
-         return; 
-    }
-
-    const route = data.routes[0];
     
-    let distance = parseFloat(route.summary.distance.metric); 
-    let tolls = 0;
-
-    if (route.summary.tolls && route.summary.tolls.cashCost) {
-        tolls = parseFloat(route.summary.tolls.cashCost);
+    if (!data.routes || data.routes.length === 0) {
+      alert("No routes found. Check console.");
+      return;
     }
 
+    // Get User Inputs
     const isRoundTrip = document.getElementById('roundTrip').checked;
     const conditionMultiplier = parseFloat(document.getElementById('conditions').value);
     const baseConsumption = parseFloat(document.getElementById('consumption').value);
     const price = parseFloat(document.getElementById('price').value);
     const people = parseInt(document.getElementById('people').value);
 
-    if (isRoundTrip) {
-      distance *= 2;
-      tolls *= 2;
-    }
-    const actualConsumption = baseConsumption * conditionMultiplier;
+    // Grab the results container and clear the old HTML
+    const resultsDiv = document.getElementById('results');
+    resultsDiv.innerHTML = `<h3 style="border-bottom: 2px solid #bbf7d0; padding-bottom: 5px; margin-top:0;">📍 Route Comparisons</h3>`;
 
-    const fuelNeeded = (distance / 100) * actualConsumption;
-    const fuelCost = fuelNeeded * price;
-    const totalCost = fuelCost + tolls;
-    const costPerPerson = totalCost / people;
+    // Loop through EVERY route TollGuru found
+    data.routes.forEach((route, index) => {
+      let distance = parseFloat(route.summary.distance.metric); 
+      let tolls = 0;
+      if (route.summary.tolls && route.summary.tolls.cashCost) {
+          tolls = parseFloat(route.summary.tolls.cashCost);
+      }
 
-    document.getElementById('resDistance').innerText = distance.toFixed(1);
-    document.getElementById('resTolls').innerText = tolls.toFixed(2);
-    document.getElementById('totalCost').innerText = totalCost.toFixed(2);
-    document.getElementById('perPersonCost').innerText = costPerPerson.toFixed(2);
-    
-    document.getElementById('results').classList.remove('hidden');
+      // Fallback name if TollGuru doesn't provide one
+      let routeName = route.summary.name || `Alternative Route ${index + 1}`;
 
-    const displayDate = new Date().toLocaleDateString();
-    const monthString = new Date().toISOString().substring(0, 7); 
-    saveTrip(displayDate, monthString, `${startCity} to ${endCity}`, distance.toFixed(1), totalCost);
+      // Apply Multipliers
+      let finalDistance = isRoundTrip ? distance * 2 : distance;
+      let finalTolls = isRoundTrip ? tolls * 2 : tolls;
+      const actualConsumption = baseConsumption * conditionMultiplier;
+
+      // The Math
+      const fuelNeeded = (finalDistance / 100) * actualConsumption;
+      const fuelCost = fuelNeeded * price;
+      const totalCost = fuelCost + finalTolls;
+      const costPerPerson = totalCost / people;
+
+      // Build a visual card for this specific route
+      const routeCard = document.createElement('div');
+      routeCard.style.border = "1px solid #166534";
+      routeCard.style.padding = "10px";
+      routeCard.style.marginBottom = "10px";
+      routeCard.style.borderRadius = "6px";
+      routeCard.style.backgroundColor = "white";
+
+      routeCard.innerHTML = `
+        <h4 style="margin: 0 0 5px 0; color: #166534;">🛣️ ${routeName}</h4>
+        <p style="margin: 2px 0; font-size: 14px;"><b>Distance:</b> ${finalDistance.toFixed(1)} km | <b>Tolls:</b> ${finalTolls.toFixed(2)} PLN</p>
+        <p style="margin: 2px 0; font-size: 14px;"><b>Total Trip Cost:</b> ${totalCost.toFixed(2)} PLN</p>
+        <p class="highlight" style="margin: 5px 0 0 0;">Owed Per Person: ${costPerPerson.toFixed(2)} PLN</p>
+      `;
+
+      resultsDiv.appendChild(routeCard);
+
+      // Only save the fastest route (the first one) to the monthly history tracker
+      if (index === 0) {
+        const displayDate = new Date().toLocaleDateString();
+        const monthString = new Date().toISOString().substring(0, 7); 
+        saveTrip(displayDate, monthString, `${startCity} to ${endCity} (${routeName})`, finalDistance.toFixed(1), totalCost);
+      }
+    });
+
+    resultsDiv.classList.remove('hidden');
 
   } catch (error) {
-    alert("Error fetching live route data. Please check your API configuration.");
+    alert("Error fetching live route data.");
     console.error(error);
   } finally {
-    calcBtn.innerText = "Calculate & Save Trip";
+    calcBtn.innerText = "Calculate Options";
     calcBtn.disabled = false;
   }
 }
